@@ -1,15 +1,35 @@
-*.iml
+# Android Studio
 .gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+/build/
+/captures/
 .DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-local.properties
+/local.properties
+
+# IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Keystore files
+*.jks
+*.keystore
+
+# Google Services
+google-services.json
+
+# Caches
+.cxx/
+*.bin
+*.apk
+*.ap_
+*.aab
+
+# Crashlytics
+com_crashlytics_export_strings.xml
+
+# Other
+/app/release/
+/app/debug/
+/app/profile/
+*.log
