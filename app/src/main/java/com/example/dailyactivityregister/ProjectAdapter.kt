@@ -6,7 +6,10 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 
-class ProjectAdapter(private val projects: List<Project>, private val onItemClick: (Project) -> Unit) : RecyclerView.Adapter<ProjectAdapter.ViewHolder>() {
+class ProjectAdapter(
+    private val projects: List<Project>,
+    private val onItemClick: (Project) -> Unit
+) : RecyclerView.Adapter<ProjectAdapter.ViewHolder>() {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val view = LayoutInflater.from(parent.context).inflate(R.layout.project_list_item, parent, false)
@@ -15,9 +18,9 @@ class ProjectAdapter(private val projects: List<Project>, private val onItemClic
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val project = projects[position]
-        holder.nameTextView.text = project.name
-        holder.agencyTextView.text = project.agency
-        holder.activityCountTextView.text = "Activities: ${project.activities.size}"
+        holder.nameTextView.text = project.project_name
+        holder.projectNumberTextView.text = project.project_number
+        holder.taskCountTextView.text = "Tasks: ${project.tasks.size}"
         holder.itemView.setOnClickListener { onItemClick(project) }
     }
 
@@ -25,7 +28,7 @@ class ProjectAdapter(private val projects: List<Project>, private val onItemClic
 
     class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val nameTextView: TextView = itemView.findViewById(R.id.projectName)
-        val agencyTextView: TextView = itemView.findViewById(R.id.projectAgency)
-        val activityCountTextView: TextView = itemView.findViewById(R.id.activityCount)
+        val projectNumberTextView: TextView = itemView.findViewById(R.id.projectNumber)
+        val taskCountTextView: TextView = itemView.findViewById(R.id.taskCount)
     }
 }
