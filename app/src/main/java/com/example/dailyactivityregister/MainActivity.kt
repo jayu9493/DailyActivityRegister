@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import retrofit2.HttpException
 
 class MainActivity : AppCompatActivity() {
 
@@ -57,22 +58,20 @@ class MainActivity : AppCompatActivity() {
                 projects.addAll(projectList)
                 adapter.notifyDataSetChanged()
 
-                // Optionally, save the fetched projects to the local DB for caching
-                db.projectDao().insertAll(projectList)
+                db.projectDao().insertAll(projects)
             } catch (e: Exception) {
-                // If the network call fails, try to load from the local database
                 val cachedProjects = db.projectDao().getAllProjects()
                 projects.clear()
                 projects.addAll(cachedProjects)
                 adapter.notifyDataSetChanged()
-                Toast.makeText(this@MainActivity, "Couldn\'t fetch new data. Showing offline projects.", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@MainActivity, "Couldn't fetch new data. Showing offline projects.", Toast.LENGTH_LONG).show()
             }
         }
     }
 
     private val addProjectLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
-            fetchProjects() // Refresh the project list from the server
+            fetchProjects()
         }
     }
 
@@ -90,12 +89,17 @@ class MainActivity : AppCompatActivity() {
 
                         val newProject = RetrofitInstance.api.uploadProjectFile(part)
                         Toast.makeText(this@MainActivity, "Successfully uploaded: ${newProject.project_name}", Toast.LENGTH_LONG).show()
-                        fetchProjects() // Refresh the list
+                        fetchProjects()
                     } else {
                         Toast.makeText(this@MainActivity, "Error reading file", Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
-                    Toast.makeText(this@MainActivity, "Upload failed: ${e.message}", Toast.LENGTH_LONG).show()
+                    // **THE FIX IS HERE:** Check for the specific 409 Conflict error
+                    if (e is HttpException && e.code() == 409) {
+                        Toast.makeText(this@MainActivity, "Upload failed: A project with this name already exists.", Toast.LENGTH_LONG).show()
+                    } else {
+                        Toast.makeText(this@MainActivity, "Upload failed: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
                 }
             }
         }
@@ -114,7 +118,7 @@ class MainActivity : AppCompatActivity() {
                 true
             }
             R.id.action_upload_excel -> {
-                excelFilePickerLauncher.launch("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                excelFilePickerLauncher.launch("*/*")
                 true
             }
             R.id.action_settings -> true

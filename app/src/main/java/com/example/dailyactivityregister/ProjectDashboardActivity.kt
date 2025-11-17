@@ -12,6 +12,7 @@ class ProjectDashboardActivity : AppCompatActivity() {
     private lateinit var binding: ActivityProjectDashboardBinding
     private lateinit var project: Project
     private lateinit var db: AppDatabase
+    private lateinit var adapter: ProjectTaskAdapter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -20,10 +21,15 @@ class ProjectDashboardActivity : AppCompatActivity() {
 
         db = AppDatabase.getDatabase(this)
         project = intent.getSerializableExtra("PROJECT") as Project
-        title = project.name
+        title = project.project_name
 
-        val adapter = ProjectTaskAdapter(project.tasks) { task, progress ->
+        adapter = ProjectTaskAdapter(project.tasks) { task, progress ->
             task.current = progress
+            // Refresh the specific item that was changed
+            val index = project.tasks.indexOf(task)
+            if (index != -1) {
+                adapter.notifyItemChanged(index)
+            }
         }
         binding.recyclerView.adapter = adapter
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
