@@ -11,6 +11,9 @@ interface ProjectDao {
     @Query("SELECT * FROM projects")
     suspend fun getAllProjects(): List<Project>
 
+    @Query("SELECT * FROM projects WHERE project_name = :name")
+    suspend fun getProjectByName(name: String): Project?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertProject(project: Project)
 

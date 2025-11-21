@@ -2,6 +2,7 @@ package com.example.dailyactivityregister
 
 import android.app.Activity
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -11,12 +12,14 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.dailyactivityregister.databinding.ActivityMainBinding
+import com.example.dailyactivityregister.network.ProjectCreateRequest
 import com.example.dailyactivityregister.network.RetrofitInstance
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.HttpException
+import java.io.Serializable
 
 class MainActivity : AppCompatActivity() {
 
@@ -57,7 +60,6 @@ class MainActivity : AppCompatActivity() {
                 projects.clear()
                 projects.addAll(projectList)
                 adapter.notifyDataSetChanged()
-
                 db.projectDao().insertAll(projects)
             } catch (e: Exception) {
                 val cachedProjects = db.projectDao().getAllProjects()
@@ -71,7 +73,28 @@ class MainActivity : AppCompatActivity() {
 
     private val addProjectLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
-            fetchProjects()
+            val requestData = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                result.data?.getSerializableExtra("NEW_PROJECT_DATA", ProjectCreateRequest::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                result.data?.getSerializableExtra("NEW_PROJECT_DATA") as? ProjectCreateRequest
+            }
+            
+            if (requestData != null) {
+                lifecycleScope.launch {
+                    try {
+                        RetrofitInstance.api.createProject(requestData)
+                        Toast.makeText(this@MainActivity, "Project created successfully!", Toast.LENGTH_SHORT).show()
+                        fetchProjects()
+                    } catch (e: Exception) {
+                        if (e is HttpException && e.code() == 400) {
+                             Toast.makeText(this@MainActivity, "Creation failed: Project with this name already exists.", Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(this@MainActivity, "Creation failed: ${e.message}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -94,7 +117,6 @@ class MainActivity : AppCompatActivity() {
                         Toast.makeText(this@MainActivity, "Error reading file", Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
-                    // **THE FIX IS HERE:** Check for the specific 409 Conflict error
                     if (e is HttpException && e.code() == 409) {
                         Toast.makeText(this@MainActivity, "Upload failed: A project with this name already exists.", Toast.LENGTH_LONG).show()
                     } else {

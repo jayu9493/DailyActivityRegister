@@ -2,6 +2,7 @@ package com.example.dailyactivityregister.network
 
 import com.example.dailyactivityregister.Project
 import okhttp3.MultipartBody
+import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.POST
@@ -10,9 +11,12 @@ import retrofit2.http.Part
 interface ApiService {
 
     @Multipart
-    @POST("projects/upload")
+    @POST("api/android/projects/upload")
     suspend fun uploadProjectFile(@Part file: MultipartBody.Part): Project
 
-    @GET("projects")
+    @GET("api/android/projects")
     suspend fun getProjects(): List<Project>
+
+    @POST("api/android/projects/create")
+    suspend fun createProject(@Body projectData: ProjectCreateRequest): Project
 }

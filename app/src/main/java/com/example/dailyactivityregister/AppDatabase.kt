@@ -6,7 +6,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [Project::class], version = 3, exportSchema = false)
+// Version is now 5 to reflect the new Project entity structure
+@Database(entities = [Project::class], version = 5, exportSchema = false)
 @TypeConverters(ProjectTaskConverter::class, AgencyConverter::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun projectDao(): ProjectDao

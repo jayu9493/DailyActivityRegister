@@ -25,7 +25,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.dailyactivityregister.network.ProjectCreateRequest
 import com.example.dailyactivityregister.ui.theme.DailyActivityRegisterTheme
+import java.io.Serializable
 
 class AddProjectActivity : AppCompatActivity() {
 
@@ -39,9 +41,10 @@ class AddProjectActivity : AppCompatActivity() {
                         TopAppBar(title = { Text("Add New Project") })
                     }
                 ) {
-                    AddProjectScreen(Modifier.padding(it)) { project ->
+                    // The onSave callback now returns the simple request object
+                    AddProjectScreen(Modifier.padding(it)) { request ->
                         val resultIntent = Intent()
-                        resultIntent.putExtra("NEW_PROJECT", project)
+                        resultIntent.putExtra("NEW_PROJECT_DATA", request as Serializable)
                         setResult(Activity.RESULT_OK, resultIntent)
                         finish()
                     }
@@ -51,15 +54,15 @@ class AddProjectActivity : AppCompatActivity() {
     }
 }
 
+// The Composable no longer knows about the full Project object.
+// It only knows about the data it needs to collect.
 @Composable
-fun AddProjectScreen(modifier: Modifier = Modifier, onSave: (Project) -> Unit) {
+fun AddProjectScreen(modifier: Modifier = Modifier, onSave: (ProjectCreateRequest) -> Unit) {
     var projectName by remember { mutableStateOf("") }
     var projectNumber by remember { mutableStateOf("") }
-    var requisitionNumber by remember { mutableStateOf("") }
-    var commencementDate by remember { mutableStateOf("") }
+    var villages by remember { mutableStateOf("") }
     var totalRouteOh by remember { mutableStateOf("") }
     var totalRouteUg by remember { mutableStateOf("") }
-    var villages by remember { mutableStateOf("") }
 
     Column(
         modifier = modifier
@@ -69,10 +72,6 @@ fun AddProjectScreen(modifier: Modifier = Modifier, onSave: (Project) -> Unit) {
         OutlinedTextField(value = projectName, onValueChange = { projectName = it }, label = { Text("Project Name") }, modifier = Modifier.fillMaxWidth())
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(value = projectNumber, onValueChange = { projectNumber = it }, label = { Text("Project Number") }, modifier = Modifier.fillMaxWidth())
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(value = requisitionNumber, onValueChange = { requisitionNumber = it }, label = { Text("Requisition Number") }, modifier = Modifier.fillMaxWidth())
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(value = commencementDate, onValueChange = { commencementDate = it }, label = { Text("Commencement Date") }, modifier = Modifier.fillMaxWidth())
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(value = totalRouteOh, onValueChange = { totalRouteOh = it }, label = { Text("Total Route OH (km)") }, modifier = Modifier.fillMaxWidth())
         Spacer(modifier = Modifier.height(8.dp))
@@ -84,24 +83,14 @@ fun AddProjectScreen(modifier: Modifier = Modifier, onSave: (Project) -> Unit) {
 
         Button(
             onClick = {
-                // **THE FIX IS HERE**: I am now including the 'agencies' list.
-                val newProject = Project(
+                val request = ProjectCreateRequest(
                     project_name = projectName,
                     project_number = projectNumber,
-                    requisition_number = requisitionNumber,
-                    commencement_date = commencementDate,
                     total_route_oh = totalRouteOh.toDoubleOrNull() ?: 0.0,
                     total_route_ug = totalRouteUg.toDoubleOrNull() ?: 0.0,
-                    line_passing_villages = villages,
-                    agencies = mutableListOf(), // Added the missing agencies list
-                    tasks = mutableListOf(
-                        ProjectTask("Survey", 100.0, 0.0, "%" ),
-                        ProjectTask("Excavation", 106.0, 0.0, "Nos."),
-                        ProjectTask("Erection", 106.0, 0.0, "Nos."),
-                        ProjectTask("Stringing", 31.682, 0.0, "km")
-                    )
+                    line_passing_villages = villages
                 )
-                onSave(newProject)
+                onSave(request)
             },
             modifier = Modifier.fillMaxWidth()
         ) {
