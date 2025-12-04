@@ -1,4 +1,5 @@
 import pandas as pd
+import os
 import io
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Query, status, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,7 +22,7 @@ import math
 # ======================================================================================
 
 class Config:
-    DATABASE_URL = "postgresql://postgres:admin@localhost:5432/daily_activity_db"
+    DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:admin@localhost:5432/daily_activity_db")
     MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
     ALLOWED_FILE_TYPES = ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]
     LOG_LEVEL = "INFO"

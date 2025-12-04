@@ -5,9 +5,16 @@ import retrofit2.converter.gson.GsonConverterFactory
 
 object RetrofitInstance {
 
-    // **IMPORTANT**: Replace this with the IP address of your computer from the 'ipconfig' command
-    // Current IP: 10.16.233.245 (Updated: 2025-11-30)
-    private const val BASE_URL = "http://10.16.233.245:8000/"
+    // **LOCAL BACKEND** (includes Excel parsing)
+    private const val LOCAL_BASE_URL = "http://10.16.233.245:8000/"
+    
+    // **SUPABASE CLOUD** (data only, no parsing yet)
+    // TODO: Migrate Excel parsing to cloud function
+    private const val SUPABASE_BASE_URL = "https://viwrtolkwuqhjqqfcwah.supabase.co/rest/v1/"
+    
+    // **CURRENT MODE**: Using local for now (includes all features)
+    // Switch to Supabase after migrating Excel parsing logic
+    private const val BASE_URL = LOCAL_BASE_URL
 
     val api: ApiService by lazy {
         Retrofit.Builder()
@@ -16,4 +23,7 @@ object RetrofitInstance {
             .build()
             .create(ApiService::class.java)
     }
+    
+    // Helper to check if using cloud
+    val isUsingCloud: Boolean get() = BASE_URL == SUPABASE_BASE_URL
 }
