@@ -1,0 +1,13 @@
+C:\Users\jayrp\backend\DailyActivityRegisterBackend\venv\Lib\site-packages\pydantic\_internal\_config.py:383: UserWarning: Valid config keys have changed in V2:
+* 'orm_mode' has been renamed to 'from_attributes'
+  warnings.warn(message, UserWarning)
+INFO:     Started server process [16236]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+ERROR:    [Errno 10048] error while attempting to bind on address ('0.0.02025-11-21 22:51:17,397 - main - INFO - Excel file read successfully.
+2025-11-21 22:51:17,401 - main - INFO - Parsed project metadata: {'Name of Project': 'Local Test Project', 'Project Number': '99999', 'Requistion Number': '88888', 'Date of commenment': '2025-11-21'}
+2025-11-21 22:51:17,402 - main - INFO - Parsed material metadata: {}
+2025-11-21 22:51:17,403 - main - WARNING - Could not find all agency headers in Suborder section: 'Name of agency' is not in list
+2025-11-21 22:51:17,404 - main - INFO - Parsed agencies: []
+2025-11-21 22:51:17,404 - main - INFO - Finalized tasks: [{'name': 'Survey', 'target': 100.0, 'current': 0.0, 'unit': '%', 'extensions': None}, {'name': 'Excavation', 'target': 100.0, 'current': 0.0, 'unit': 'Nos.', 'extensions': None}, {'name': 'Foundation', 'target': 100.0, 'current': 0.0, 'unit': 'Nos.', 'extensions': None}, {'name': 'Erection', 'target': 100.0, 'current': 0.0, 'unit': 'Nos.', 'extensions': None}, {'name': 'Stringing', 'target': 0.0, 'current': 0.0, 'unit': 'km', 'extensions': None}]
+2025-11-21 22:51:17,409 - main - INFO - Project 'Local Test Project' is new. Creating now.

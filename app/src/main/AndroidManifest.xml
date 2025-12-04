@@ -30,6 +30,10 @@
         <activity
             android:name=".ProjectDashboardActivity"
             android:label="Project Dashboard" />
+        <activity
+            android:name=".SettingsActivity"
+            android:label="Settings"
+            android:parentActivityName=".MainActivity" />
     </application>
 
 </manifest>

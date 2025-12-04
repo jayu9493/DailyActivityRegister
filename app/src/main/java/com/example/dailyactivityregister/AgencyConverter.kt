@@ -5,15 +5,17 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 
 class AgencyConverter {
+    private val gson = Gson()
+    private val listType = object : TypeToken<List<Agency>>() {}.type
+
     @TypeConverter
-    fun fromString(value: String): MutableList<Agency> {
-        val listType = object : TypeToken<MutableList<Agency>>() {}.type
-        return Gson().fromJson(value, listType)
+    fun stringToAgencyList(value: String?): List<Agency> {
+        if (value.isNullOrBlank()) return emptyList()
+        return gson.fromJson(value, listType) ?: emptyList()
     }
 
     @TypeConverter
-    fun fromList(list: MutableList<Agency>): String {
-        val gson = Gson()
-        return gson.toJson(list)
+    fun agencyListToString(list: List<Agency>?): String {
+        return gson.toJson(list ?: emptyList<Agency>())
     }
 }

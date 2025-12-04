@@ -1,10 +1,12 @@
 package com.example.dailyactivityregister
 
+import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.TextView
+import androidx.core.widget.addTextChangedListener
 import androidx.recyclerview.widget.RecyclerView
 
 class DailyEntryAdapter(
@@ -27,16 +29,20 @@ class DailyEntryAdapter(
     class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val taskName: TextView = itemView.findViewById(R.id.taskName)
         private val progressInput: EditText = itemView.findViewById(R.id.progressInput)
+        private var textWatcher: TextWatcher? = null
 
         fun bind(task: ProjectTask, onProgressChanged: (String, Double) -> Unit) {
             taskName.text = task.name
             progressInput.hint = task.unit
 
-            progressInput.setOnFocusChangeListener { _, hasFocus ->
-                if (!hasFocus) {
-                    val progress = progressInput.text.toString().toDoubleOrNull() ?: 0.0
-                    onProgressChanged(task.name, progress)
-                }
+            // Clear previous listener
+            textWatcher?.let { progressInput.removeTextChangedListener(it) }
+            progressInput.setText("") // Clear previous input
+
+            // Add new listener
+            textWatcher = progressInput.addTextChangedListener {
+                val progress = it.toString().toDoubleOrNull() ?: 0.0
+                onProgressChanged(task.name, progress)
             }
         }
     }

@@ -6,10 +6,10 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-// Version is now 5 to reflect the new Project entity structure
-@Database(entities = [Project::class], version = 5, exportSchema = false)
-@TypeConverters(ProjectTaskConverter::class, AgencyConverter::class)
+@Database(entities = [Project::class], version = 10, exportSchema = false)
+@TypeConverters(ProjectTaskConverter::class, AgencyConverter::class, DailyLogConverter::class)
 abstract class AppDatabase : RoomDatabase() {
+
     abstract fun projectDao(): ProjectDao
 
     companion object {
@@ -21,10 +21,8 @@ abstract class AppDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "app_database"
-                )
-                .fallbackToDestructiveMigration()
-                .build()
+                    "daily_activity_db"
+                ).fallbackToDestructiveMigration().build()
                 INSTANCE = instance
                 instance
             }

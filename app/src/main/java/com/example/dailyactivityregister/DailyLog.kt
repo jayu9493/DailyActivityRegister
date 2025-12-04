@@ -1,11 +1,10 @@
 package com.example.dailyactivityregister
 
+import androidx.room.Entity
 import java.io.Serializable
 
-// Represents a single day's work entry
+// If you want DailyLog to be a separate entity
 data class DailyLog(
     val date: String,
-    // A map where the key is the task name (e.g., "Excavation")
-    // and the value is the progress made on that specific day.
-    val progress: Map<String, Double>
+    val progress: Map<String, Double> = mapOf()
 ) : Serializable

@@ -3,6 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
+    android:gravity="center_vertical"
     android:paddingTop="8dp"
     android:paddingBottom="8dp">
 
@@ -11,13 +12,14 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:layout_gravity="center_vertical"/>
+        android:text="Task Name" />
 
     <EditText
         android:id="@+id/progressInput"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:minEms="5"
-        android:inputType="numberDecimal" />
+        android:inputType="numberDecimal"
+        android:hint="0.0" />
 
 </LinearLayout>

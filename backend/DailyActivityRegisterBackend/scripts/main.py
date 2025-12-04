@@ -1,0 +1,624 @@
+import pandas as pd
+import io
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Query, status, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import create_engine, Column, String, Double, JSON, DateTime, func, text
+from sqlalchemy.orm import sessionmaker, declarative_base, Session
+from sqlalchemy.orm.attributes import flag_modified
+from sqlalchemy.exc import SQLAlchemyError
+from pydantic import BaseModel, validator, Field
+import logging
+import numpy as np
+from typing import List, Optional, Dict, Any
+from datetime import datetime, date
+import json
+import socket
+import math
+
+# ======================================================================================
+# 1. CONFIGURATION AND SETUP
+# ======================================================================================
+
+class Config:
+    DATABASE_URL = "postgresql://postgres:admin@localhost:5432/daily_activity_db"
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+    ALLOWED_FILE_TYPES = ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]
+    LOG_LEVEL = "INFO"
+
+logging.basicConfig(
+    level=getattr(logging, Config.LOG_LEVEL),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(), logging.FileHandler('app.log')]
+)
+logger = logging.getLogger(__name__)
+
+# Performance: Enable connection pooling
+engine = create_engine(
+    Config.DATABASE_URL,
+    pool_size=20,           # Increased pool size for better concurrency
+    max_overflow=40,        # Allow more overflow connections
+    pool_pre_ping=True,     # Check connection validity before using
+    pool_recycle=3600       # Recycle connections every hour
+)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+# ======================================================================================
+# 2. DATABASE MODELS
+# ======================================================================================
+
+class ProjectDB(Base):
+    __tablename__ = "projects"
+    
+    project_name = Column(String, primary_key=True, index=True)
+    project_number = Column(String, index=True)
+    requisition_number = Column(String, index=True)
+    suborder_number = Column(String, nullable=True)
+    commencement_date = Column(String)
+    total_route = Column(Double, default=0.0)
+    total_route_oh = Column(Double, default=0.0)
+    total_route_ug = Column(Double, default=0.0)
+    line_passing_villages = Column(String)
+    agencies = Column(JSON)
+    tasks = Column(JSON)
+    daily_logs = Column(JSON, default=[])
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    status = Column(String, default="active")
+
+# Migration function
+def migrate_database():
+    """Check and update database schema if needed"""
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'projects' 
+                AND column_name IN ('total_route', 'created_at', 'updated_at', 'status', 'daily_logs', 'suborder_number')
+            """))
+            existing_columns = {row[0] for row in result}
+            
+            missing_columns = []
+            if 'total_route' not in existing_columns:
+                missing_columns.append('ADD COLUMN total_route DOUBLE PRECISION DEFAULT 0.0')
+            if 'created_at' not in existing_columns:
+                missing_columns.append('ADD COLUMN created_at TIMESTAMP DEFAULT NOW()')
+            if 'updated_at' not in existing_columns:
+                missing_columns.append('ADD COLUMN updated_at TIMESTAMP DEFAULT NOW()')
+            if 'status' not in existing_columns:
+                missing_columns.append('ADD COLUMN status VARCHAR DEFAULT \'active\'')
+            if 'daily_logs' not in existing_columns:
+                missing_columns.append('ADD COLUMN daily_logs JSON DEFAULT \'[]\'')
+            if 'suborder_number' not in existing_columns:
+                missing_columns.append('ADD COLUMN suborder_number VARCHAR DEFAULT NULL')
+            
+            if missing_columns:
+                logger.info(f"Migrating database: Adding {len(missing_columns)} new columns")
+                alter_sql = f"ALTER TABLE projects {', '.join(missing_columns)}"
+                conn.execute(text(alter_sql))
+                conn.commit()
+                logger.info("Database migration completed successfully")
+            else:
+                logger.info("Database schema is up to date")
+                
+    except Exception as e:
+        logger.warning(f"Database migration check failed: {e}")
+
+migrate_database()
+Base.metadata.create_all(bind=engine)
+
+# ======================================================================================
+# 3. PYDANTIC MODELS (MATCHING ANDROID)
+# ======================================================================================
+
+class Agency(BaseModel):
+    name: str
+    type_of_work: Optional[str] = None
+    location_wise: Optional[str] = None
+    po_number: Optional[str] = None
+    suborder_no: Optional[str] = None
+
+class Task(BaseModel):
+    name: str
+    target: float = Field(ge=0)
+    current: float = Field(ge=0)
+    unit: str
+
+class DailyLog(BaseModel):
+    date: str
+    progress: Dict[str, float] = {}
+
+class ProjectResponse(BaseModel):
+    project_name: str
+    project_number: Optional[str] = None
+    requisition_number: Optional[str] = None
+    suborder_number: Optional[str] = None
+    commencement_date: Optional[str] = None
+    
+    # Android uses these names
+    ug_line_length: float = Field(default=0.0)
+    oh_line_length: float = Field(default=0.0)
+    
+    line_passing_villages: Optional[str] = None
+    agencies: List[Agency] = []
+    tasks: List[Task] = []
+    daily_logs: List[DailyLog] = []
+    
+    # Extra fields
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    status: Optional[str] = None
+
+    class Config:
+        from_attributes = True # Pydantic V2 replacement for orm_mode
+
+# Request Models
+class AndroidTaskUpdate(BaseModel):
+    task_name: str
+    current_value: float = Field(ge=0)
+
+class AndroidProjectUpdate(BaseModel):
+    project_name: str
+    task_updates: List[AndroidTaskUpdate]
+
+class AndroidProjectCreate(BaseModel):
+    project_name: str
+    project_number: Optional[str] = None
+    total_route_oh: float = Field(default=0.0, ge=0)
+    total_route_ug: float = Field(default=0.0, ge=0)
+    line_passing_villages: Optional[str] = None
+
+# ======================================================================================
+# 4. DEPENDENCY INJECTION
+# ======================================================================================
+
+def get_db_session():
+    db = SessionLocal()
+    try:
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+# ======================================================================================
+# 5. REPOSITORY & HELPERS
+# ======================================================================================
+
+def clean_float(val: Any) -> float:
+    """Safely convert value to float, handling NaN/Inf"""
+    if val is None:
+        return 0.0
+    try:
+        f_val = float(val)
+        if math.isnan(f_val) or math.isinf(f_val):
+            return 0.0
+        return f_val
+    except (ValueError, TypeError):
+        return 0.0
+
+def clean_db_project(project: ProjectDB) -> dict:
+    """Convert SQLAlchemy object to clean dictionary matching Android model"""
+    try:
+        # Basic mapping
+        project_dict = {
+            "project_name": project.project_name,
+            "project_number": project.project_number,
+            "requisition_number": project.requisition_number,
+            "suborder_number": project.suborder_number,
+            "commencement_date": project.commencement_date,
+            "line_passing_villages": project.line_passing_villages,
+            "agencies": project.agencies or [],
+            "tasks": project.tasks or [],
+            "daily_logs": project.daily_logs or [],
+            "created_at": project.created_at,
+            "updated_at": project.updated_at,
+            "status": project.status
+        }
+        
+        # Map route lengths to Android names AND clean floats
+        project_dict["oh_line_length"] = clean_float(project.total_route_oh)
+        project_dict["ug_line_length"] = clean_float(project.total_route_ug)
+        
+        # Clean tasks
+        if project_dict["tasks"]:
+            for task in project_dict["tasks"]:
+                task["target"] = clean_float(task.get("target"))
+                task["current"] = clean_float(task.get("current"))
+        
+        # Handle dates
+        if isinstance(project_dict["created_at"], (datetime, date)):
+            project_dict["created_at"] = project_dict["created_at"].isoformat()
+        if isinstance(project_dict["updated_at"], (datetime, date)):
+            project_dict["updated_at"] = project_dict["updated_at"].isoformat()
+            
+        return project_dict
+    except Exception as e:
+        logger.error(f"Error cleaning project data: {e}")
+        raise
+
+class ProjectRepository:
+    @staticmethod
+    def get_project_by_name(db: Session, project_name: str) -> Optional[ProjectDB]:
+        return db.query(ProjectDB).filter(
+            ProjectDB.project_name == project_name,
+            ProjectDB.status == "active"
+        ).first()
+
+    @staticmethod
+    def get_all_projects(db: Session, skip: int = 0, limit: int = 100) -> List[ProjectDB]:
+        return db.query(ProjectDB).filter(
+            ProjectDB.status == "active"
+        ).offset(skip).limit(limit).all()
+
+    @staticmethod
+    def create_project(db: Session, project_data: dict) -> ProjectDB:
+        try:
+            existing = ProjectRepository.get_project_by_name(db, project_data['project_name'])
+            if existing:
+                raise HTTPException(status_code=400, detail="Project already exists")
+                
+            db_project = ProjectDB(**project_data)
+            db.add(db_project)
+            db.flush()
+            return db_project
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error(f"Database error: {e}")
+            raise
+
+    @staticmethod
+    def update_project_tasks(db: Session, project_name: str, task_updates: List[dict]) -> Optional[ProjectDB]:
+        try:
+            db_project = ProjectRepository.get_project_by_name(db, project_name)
+            if db_project and db_project.tasks:
+                current_tasks = list(db_project.tasks) # Copy
+                for update in task_updates:
+                    for task in current_tasks:
+                        if task.get('name') == update.get('task_name'):
+                            task['current'] = update.get('current_value', 0)
+                            break
+                db_project.tasks = current_tasks
+                db_project.updated_at = datetime.now()
+                flag_modified(db_project, "tasks") # CRITICAL FIX
+                db.flush()
+            return db_project
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error(f"Database error: {e}")
+            raise
+
+# ======================================================================================
+# 6. EXCEL PARSER
+# ======================================================================================
+
+class ExcelTemplateParser:
+    def parse_project_excel(self, contents: bytes) -> dict:
+        """Parse Excel file and return dictionary for DB creation"""
+        try:
+            # Performance: Use read_only=True for openpyxl if possible, but pandas handles it.
+            # Using 'calamine' engine would be faster but requires dependency. Sticking to openpyxl.
+            df = pd.read_excel(io.BytesIO(contents), header=None, engine='openpyxl').fillna('')
+            
+            project_info = {}
+            agencies_map = {} 
+            
+            ug_len = 0.0
+            oh_len = 0.0
+            
+            for r_idx, row in df.iterrows():
+                for c_idx, cell in enumerate(row):
+                    val = str(cell).strip()
+                    val_lower = val.lower()
+                    
+                    if "name of project" in val_lower:
+                        if c_idx + 1 < len(row): project_info["name"] = str(row[c_idx+1]).strip()
+                    if "project number" in val_lower:
+                        if c_idx + 1 < len(row): project_info["number"] = str(row[c_idx+1]).strip()
+                    if "date of commenment" in val_lower:
+                        if c_idx + 1 < len(row): project_info["date"] = str(row[c_idx+1]).strip()
+                    if "ug line length" in val_lower:
+                        if c_idx + 1 < len(row): ug_len = clean_float(str(row[c_idx+1]).strip())
+                    if "oh line length" in val_lower:
+                        if c_idx + 1 < len(row): oh_len = clean_float(str(row[c_idx+1]).strip())
+
+            # Working Agency Table
+            wa_start = -1
+            for r_idx, row in df.iterrows():
+                if "working agency" in str(row[0]).lower():
+                    wa_start = r_idx + 1
+                    break
+            
+            if wa_start != -1:
+                for r_idx in range(wa_start, len(df)):
+                    row = df.iloc[r_idx]
+                    if "requestion number" in str(row[0]).lower() or "suborder number" in str(row[0]).lower(): break
+                    if len(row) > 1:
+                        name = str(row[1]).strip()
+                        if name and name.lower() != 'nan' and "name of agency" not in name.lower():
+                            if name not in agencies_map: agencies_map[name] = {"name": name}
+                            if len(row) > 2: agencies_map[name]["type_of_work"] = str(row[2]).strip()
+                            if len(row) > 3: agencies_map[name]["location_wise"] = str(row[3]).strip()
+
+            # Suborder Number Table
+            so_start = -1
+            for r_idx, row in df.iterrows():
+                if "suborder number" in str(row[0]).lower():
+                    so_start = r_idx + 1
+                    break
+            
+            if so_start != -1:
+                for r_idx in range(so_start, len(df)):
+                    row = df.iloc[r_idx]
+                    if "date of commenment" in str(row[0]).lower(): break
+                    if len(row) > 1:
+                        name = str(row[1]).strip()
+                        if name and name.lower() != 'nan' and "name of agency" not in name.lower():
+                            if name not in agencies_map: agencies_map[name] = {"name": name}
+                            if len(row) > 2: agencies_map[name]["po_number"] = str(row[2]).strip()
+                            if len(row) > 3: agencies_map[name]["suborder_no"] = str(row[3]).strip()
+
+            total_route = ug_len + oh_len
+            tasks = [
+                {"name": "Survey", "target": 100.0, "current": 0.0, "unit": "%"},
+                {"name": "Excavation", "target": 100.0, "current": 0.0, "unit": "Nos."},
+                {"name": "Erection", "target": 100.0, "current": 0.0, "unit": "Nos."},
+                {"name": "Stringing", "target": total_route if total_route > 0 else 100.0, "current": 0.0, "unit": "km"}
+            ]
+
+            return {
+                "project_name": project_info.get("name", "Unknown Project"),
+                "project_number": project_info.get("number", ""),
+                "requisition_number": "", 
+                "commencement_date": project_info.get("date", ""),
+                "total_route": total_route,
+                "total_route_oh": oh_len,
+                "total_route_ug": ug_len,
+                "line_passing_villages": "",
+                "agencies": list(agencies_map.values()),
+                "tasks": tasks,
+                "daily_logs": []
+            }
+        except Exception as e:
+            logger.error(f"Excel parsing error: {e}")
+            raise HTTPException(status_code=400, detail=f"Failed to parse Excel: {str(e)}")
+
+def validate_file(file: UploadFile) -> bool:
+    if file.content_type not in Config.ALLOWED_FILE_TYPES: return False
+    file.file.seek(0, 2)
+    size = file.file.tell()
+    file.file.seek(0)
+    return size <= Config.MAX_FILE_SIZE
+
+# ======================================================================================
+# 7. APP & ENDPOINTS
+# ======================================================================================
+
+app = FastAPI(title="Daily Activity Register API", version="3.2.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Global error occurred: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"message": "Internal Server Error", "detail": str(exc)},
+    )
+
+@app.get("/")
+def root():
+    return {"status": "online", "version": "3.2.0", "message": "Backend is running"}
+
+@app.get("/health")
+def health(db: Session = Depends(get_db_session)):
+    try:
+        db.execute(text("SELECT 1"))
+        return {"database": "connected", "timestamp": datetime.now().isoformat()}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+@app.post("/api/android/projects/upload", response_model=ProjectResponse)
+async def upload_project(file: UploadFile = File(...), db: Session = Depends(get_db_session)):
+    try:
+        logger.info(f"Received file upload: {file.filename}")
+        if not validate_file(file):
+            raise HTTPException(status_code=400, detail="Invalid file")
+        
+        contents = await file.read()
+        parser = ExcelTemplateParser()
+        project_data = parser.parse_project_excel(contents)
+        
+        existing = ProjectRepository.get_project_by_name(db, project_data["project_name"])
+        if existing:
+            logger.info("Project exists, returning existing data")
+            return clean_db_project(existing)
+        
+        logger.info("Creating new project")
+        new_project = ProjectRepository.create_project(db, project_data)
+        db.commit()
+        return clean_db_project(new_project)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Upload endpoint error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+@app.post("/api/android/projects/create", response_model=ProjectResponse)
+def create_project(data: AndroidProjectCreate, db: Session = Depends(get_db_session)):
+    total = data.total_route_oh + data.total_route_ug
+    tasks = [
+        {"name": "Survey", "target": 100.0, "current": 0.0, "unit": "%"},
+        {"name": "Excavation", "target": 100.0, "current": 0.0, "unit": "Nos."},
+        {"name": "Erection", "target": 100.0, "current": 0.0, "unit": "Nos."},
+        {"name": "Stringing", "target": total, "current": 0.0, "unit": "km"}
+    ]
+    
+    project_dict = {
+        "project_name": data.project_name,
+        "project_number": data.project_number,
+        "total_route": total,
+        "total_route_oh": data.total_route_oh,
+        "total_route_ug": data.total_route_ug,
+        "line_passing_villages": data.line_passing_villages,
+        "tasks": tasks,
+        "agencies": [],
+        "daily_logs": []
+    }
+    
+    new_project = ProjectRepository.create_project(db, project_dict)
+    db.commit()
+    return clean_db_project(new_project)
+
+@app.get("/api/android/projects", response_model=List[ProjectResponse])
+def get_projects(skip: int = 0, limit: int = 100, db: Session = Depends(get_db_session)):
+    projects = ProjectRepository.get_all_projects(db, skip, limit)
+    return [clean_db_project(p) for p in projects]
+
+@app.get("/api/android/projects/{project_name}", response_model=ProjectResponse)
+def get_project(project_name: str, db: Session = Depends(get_db_session)):
+    project = ProjectRepository.get_project_by_name(db, project_name)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return clean_db_project(project)
+
+@app.put("/api/android/projects/{project_name}", response_model=ProjectResponse)
+async def update_project(
+    project_name: str, 
+    project_data: ProjectResponse, 
+    db: Session = Depends(get_db_session)
+):
+    try:
+        logger.info(f"Updating project: {project_name}")
+        db_project = ProjectRepository.get_project_by_name(db, project_name)
+        if not db_project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Use model_dump() instead of deprecated dict() (Pydantic V2)
+        data_dict = project_data.model_dump(exclude_unset=True)
+        
+        # Update simple fields
+        for key, value in data_dict.items():
+            if hasattr(db_project, key) and key not in ["tasks", "agencies", "daily_logs", "created_at", "updated_at", "oh_line_length", "ug_line_length"]:
+                setattr(db_project, key, value)
+        
+        # Map Android fields to DB columns
+        if "oh_line_length" in data_dict: db_project.total_route_oh = data_dict["oh_line_length"]
+        if "ug_line_length" in data_dict: db_project.total_route_ug = data_dict["ug_line_length"]
+
+        # Update JSON columns with flag_modified for persistence
+        if "tasks" in data_dict:
+            tasks_data = [t.model_dump() if hasattr(t, 'model_dump') else t for t in data_dict["tasks"]]
+            db_project.tasks = tasks_data
+            flag_modified(db_project, "tasks")
+            
+        if "agencies" in data_dict:
+            agencies_data = [a.model_dump() if hasattr(a, 'model_dump') else a for a in data_dict["agencies"]]
+            db_project.agencies = agencies_data
+            flag_modified(db_project, "agencies")
+            
+        if "daily_logs" in data_dict:
+            logs_data = [l.model_dump() if hasattr(l, 'model_dump') else l for l in data_dict["daily_logs"]]
+            db_project.daily_logs = logs_data
+            flag_modified(db_project, "daily_logs")
+            
+        db_project.updated_at = datetime.now()
+        db.commit()
+        db.refresh(db_project)
+        logger.info(f"Project updated successfully: {project_name}")
+        return clean_db_project(db_project)
+        
+    except Exception as e:
+        logger.error(f"Update failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/android/projects/update-tasks", response_model=ProjectResponse)
+def update_tasks(data: AndroidProjectUpdate, db: Session = Depends(get_db_session)):
+    updates = [u.model_dump() for u in data.task_updates]
+    updated = ProjectRepository.update_project_tasks(db, data.project_name, updates)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Project not found")
+    db.commit()
+    return clean_db_project(updated)
+
+# ======================================================================================
+# 8. LEGACY ENDPOINTS (Backward Compatibility)
+# ======================================================================================
+
+@app.post("/projects/upload", response_model=ProjectResponse)
+async def upload_project_file(file: UploadFile = File(...), db: Session = Depends(get_db_session)):
+    return await upload_project(file, db)
+
+@app.delete("/api/android/projects/{project_name}")
+def delete_project(project_name: str, password: str, db: Session = Depends(get_db_session)):
+    """
+    Delete a project by name with password protection.
+    Password required: 'admin'
+    """
+    try:
+        # Verify password
+        if password != "admin":
+            raise HTTPException(status_code=403, detail="Invalid password")
+        
+        logger.info(f"Delete request for project: {project_name}")
+        
+        # Find the project
+        db_project = ProjectRepository.get_project_by_name(db, project_name)
+        if not db_project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Delete the project
+        db.delete(db_project)
+        db.commit()
+        
+        logger.info(f"Project deleted successfully: {project_name}")
+        return {"message": f"Project '{project_name}' deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Delete failed: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/projects", response_model=List[ProjectResponse])
+def get_all_projects_legacy(skip: int = 0, limit: int = 100, db: Session = Depends(get_db_session)):
+    return get_projects(skip, limit, db)
+
+# ======================================================================================
+# MAIN EXECUTION
+# ======================================================================================
+
+def get_ip_address():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except:
+        return "127.0.0.1"
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    ip = get_ip_address()
+    print("\n" + "="*60)
+    print(f" SERVER STARTING - NETWORK CONFIGURATION")
+    print("="*60)
+    print(f" Local Access:   http://localhost:8000")
+    print(f" Network Access: http://{ip}:8000")
+    print("="*60 + "\n")
+    
+    uvicorn.run(app, host="0.0.0.0", port=8000)

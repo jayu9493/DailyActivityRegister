@@ -5,15 +5,17 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 
 class ProjectTaskConverter {
+    private val gson = Gson()
+    private val listType = object : TypeToken<List<ProjectTask>>() {}.type
+
     @TypeConverter
-    fun fromString(value: String): MutableList<ProjectTask> {
-        val listType = object : TypeToken<MutableList<ProjectTask>>() {}.type
-        return Gson().fromJson(value, listType)
+    fun stringToTaskList(value: String?): List<ProjectTask> {
+        if (value.isNullOrBlank()) return emptyList()
+        return gson.fromJson(value, listType) ?: emptyList()
     }
 
     @TypeConverter
-    fun fromList(list: MutableList<ProjectTask>): String {
-        val gson = Gson()
-        return gson.toJson(list)
+    fun taskListToString(list: List<ProjectTask>?): String {
+        return gson.toJson(list ?: emptyList<ProjectTask>())
     }
 }
