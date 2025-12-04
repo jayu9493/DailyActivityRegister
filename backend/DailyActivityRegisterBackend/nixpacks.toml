@@ -1,11 +1,8 @@
 [phases.setup]
-nixPkgs = ["python310"]
+nixPkgs = ["python310", "pip"]
 
 [phases.install]
-cmds = ["pip install -r requirements.txt"]
-
-[phases.build]
-cmds = ["echo 'Build complete'"]
+cmds = ["pip install --upgrade pip", "pip install -r requirements.txt"]
 
 [start]
-cmd = "cd scripts && uvicorn main:app --host 0.0.0.0 --port $PORT"
+cmd = "uvicorn scripts.main:app --host 0.0.0.0 --port $PORT"
