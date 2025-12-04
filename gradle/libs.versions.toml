@@ -13,6 +13,7 @@ compose-bom = "2024.02.00"
 retrofit = "2.9.0"
 okhttp = "4.12.0"
 swiperefreshlayout = "1.1.0"
+vico = "2.0.0-alpha.28"  # Vico charts for Compose
 
 [libraries]
 # AndroidX Core
@@ -48,6 +49,11 @@ compose-activity = { group = "androidx.activity", name = "activity-compose", ver
 retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
 retrofit-converter-gson = { group = "com.squareup.retrofit2", name = "converter-gson", version.ref = "retrofit" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+
+# Vico Charts
+vico-compose = { group = "com.patrykandpatrick.vico", name = "compose", version.ref = "vico" }
+vico-compose-m3 = { group = "com.patrykandpatrick.vico", name = "compose-m3", version.ref = "vico" }
+vico-core = { group = "com.patrykandpatrick.vico", name = "core", version.ref = "vico" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

@@ -26,7 +26,9 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var projects: MutableList<Project>
+    private lateinit var allProjects: List<Project>  // Store all projects
     private lateinit var adapter: ProjectAdapter
+    private var currentFilter: String? = null  // Track current filter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Apply saved theme before calling super.onCreate()
@@ -43,6 +45,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         setSupportActionBar(binding.toolbar)
         setupRecyclerView()
+        setupSubdivisionFilter()
         fetchProjects()
     }
 
@@ -68,13 +71,41 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val projectList = RetrofitInstance.api.getProjects()
-                projects.clear()
-                projects.addAll(projectList)
-                adapter.notifyDataSetChanged()
+                allProjects = projectList  // Store all projects
+                applyFilter(currentFilter)  // Apply current filter
             } catch (e: Exception) {
                 Toast.makeText(this@MainActivity, "Failed to fetch projects: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }
+    }
+
+    private fun setupSubdivisionFilter() {
+        binding.contentMain.subdivisionChipGroup.setOnCheckedStateChangeListener { _, checkedIds ->
+            currentFilter = when {
+                checkedIds.contains(R.id.chipMundra) -> "Mundra"
+                checkedIds.contains(R.id.chipBhuj) -> "Bhuj"
+                checkedIds.contains(R.id.chipAnjar1) -> "Anjar-1"
+                checkedIds.contains(R.id.chipAnjar2) -> "Anjar-2"
+                checkedIds.contains(R.id.chipSamakhayali) -> "Samakhayali"
+                else -> null  // "All" selected
+            }
+            applyFilter(currentFilter)
+        }
+    }
+
+    private fun applyFilter(subdivision: String?) {
+        if (!::allProjects.isInitialized) return
+        
+        val filteredList = if (subdivision == null) {
+            allProjects  // Show all
+        } else {
+            // Case-insensitive comparison
+            allProjects.filter { it.subdivision?.equals(subdivision, ignoreCase = true) == true }
+        }
+        
+        projects.clear()
+        projects.addAll(filteredList)
+        adapter.notifyDataSetChanged()
     }
 
     private val excelFilePickerLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -142,6 +173,11 @@ class MainActivity : AppCompatActivity() {
             R.id.action_add_project -> {
                 val intent = Intent(this, AddProjectActivity::class.java)
                 addProjectLauncher.launch(intent)
+                true
+            }
+            R.id.action_statistics -> {
+                val intent = Intent(this, StatisticsActivity::class.java)
+                startActivity(intent)
                 true
             }
             R.id.action_settings -> {

@@ -14,6 +14,7 @@ data class Project(
     val ug_line_length: Double,
     val oh_line_length: Double,
     val line_passing_villages: String?,
+    val subdivision: String?,  // NEW: For filtering by sub-division
     val agencies: List<Agency> = listOf(),
     val tasks: List<ProjectTask> = listOf(),
     val daily_logs: List<DailyLog> = listOf()

@@ -71,4 +71,9 @@ dependencies {
 
     // Other
     implementation(libs.gson)
+
+    // Vico Charts
+    implementation(libs.vico.compose)
+    implementation(libs.vico.compose.m3)
+    implementation(libs.vico.core)
 }

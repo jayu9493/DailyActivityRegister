@@ -20,7 +20,6 @@
             android:theme="@style/Theme.DailyActivityRegister">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
@@ -33,6 +32,10 @@
         <activity
             android:name=".SettingsActivity"
             android:label="Settings"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".StatisticsActivity"
+            android:label="Statistics"
             android:parentActivityName=".MainActivity" />
     </application>
 

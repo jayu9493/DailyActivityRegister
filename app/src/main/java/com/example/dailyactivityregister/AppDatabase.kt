@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [Project::class], version = 10, exportSchema = false)
+@Database(entities = [Project::class], version = 11, exportSchema = false)
 @TypeConverters(ProjectTaskConverter::class, AgencyConverter::class, DailyLogConverter::class)
 abstract class AppDatabase : RoomDatabase() {
 

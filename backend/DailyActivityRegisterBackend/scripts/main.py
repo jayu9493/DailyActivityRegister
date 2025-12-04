@@ -60,6 +60,7 @@ class ProjectDB(Base):
     total_route_oh = Column(Double, default=0.0)
     total_route_ug = Column(Double, default=0.0)
     line_passing_villages = Column(String)
+    subdivision = Column(String, nullable=True, index=True)  # NEW: For filtering projects
     agencies = Column(JSON)
     tasks = Column(JSON)
     daily_logs = Column(JSON, default=[])
@@ -142,6 +143,7 @@ class ProjectResponse(BaseModel):
     oh_line_length: float = Field(default=0.0)
     
     line_passing_villages: Optional[str] = None
+    subdivision: Optional[str] = None  # NEW: Sub-division filter
     agencies: List[Agency] = []
     tasks: List[Task] = []
     daily_logs: List[DailyLog] = []
@@ -212,6 +214,7 @@ def clean_db_project(project: ProjectDB) -> dict:
             "suborder_number": project.suborder_number,
             "commencement_date": project.commencement_date,
             "line_passing_villages": project.line_passing_villages,
+            "subdivision": project.subdivision,  # NEW
             "agencies": project.agencies or [],
             "tasks": project.tasks or [],
             "daily_logs": project.daily_logs or [],
@@ -325,6 +328,8 @@ class ExcelTemplateParser:
                         if c_idx + 1 < len(row): ug_len = clean_float(str(row[c_idx+1]).strip())
                     if "oh line length" in val_lower:
                         if c_idx + 1 < len(row): oh_len = clean_float(str(row[c_idx+1]).strip())
+                    if "subdivision" in val_lower:
+                        if c_idx + 1 < len(row): project_info["subdivision"] = str(row[c_idx+1]).strip()
 
             # Working Agency Table
             wa_start = -1
@@ -379,6 +384,7 @@ class ExcelTemplateParser:
                 "total_route_oh": oh_len,
                 "total_route_ug": ug_len,
                 "line_passing_villages": "",
+            "subdivision": project_info.get("subdivision", None),  # NEW: Include subdivision
                 "agencies": list(agencies_map.values()),
                 "tasks": tasks,
                 "daily_logs": []

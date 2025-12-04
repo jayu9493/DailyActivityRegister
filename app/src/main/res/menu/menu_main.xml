@@ -8,6 +8,11 @@
         android:title="@string/action_add_project"
         app:showAsAction="ifRoom" />
     <item
+        android:id="@+id/action_statistics"
+        android:orderInCategory="101"
+        android:title="Statistics"
+        app:showAsAction="ifRoom" />
+    <item
         android:id="@+id/action_upload_excel"
         android:orderInCategory="102"
         android:title="@string/action_upload_excel"
