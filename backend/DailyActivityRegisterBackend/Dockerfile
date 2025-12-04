@@ -12,8 +12,6 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY . .
 
-# Expose port
-EXPOSE $PORT
-
-# Start command
-CMD uvicorn scripts.main:app --host 0.0.0.0 --port $PORT
+# Railway provides PORT as environment variable
+# We need to use shell form to expand $PORT
+CMD uvicorn scripts.main:app --host 0.0.0.0 --port ${PORT:-8000}
