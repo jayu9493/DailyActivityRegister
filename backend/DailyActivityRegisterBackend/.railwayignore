@@ -1,0 +1,10 @@
+app/
+gradle/
+.gradle/
+gradlew
+gradlew.bat
+build.gradle.kts
+settings.gradle.kts
+*.apk
+*.aab
+local.properties
