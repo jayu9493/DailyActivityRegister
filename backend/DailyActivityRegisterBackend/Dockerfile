@@ -12,6 +12,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY . .
 
-# Railway provides PORT as environment variable
-# We need to use shell form to expand $PORT
-CMD uvicorn scripts.main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Create a start script
+RUN echo '#!/bin/bash\nuvicorn scripts.main:app --host 0.0.0.0 --port ${PORT:-8000}' > /app/start.sh && \
+    chmod +x /app/start.sh
+
+# Use shell to properly expand environment variables
+CMD ["/bin/bash", "/app/start.sh"]
