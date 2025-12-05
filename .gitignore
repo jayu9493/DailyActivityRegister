@@ -46,4 +46,9 @@ database_backups/
 # Build outputs
 build_output*.txt
 
+# Firebase
+firebase-backend/functions/node_modules/
+firebase-backend/.firebase/
+
+
 
