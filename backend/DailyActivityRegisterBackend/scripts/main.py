@@ -171,6 +171,7 @@ class AndroidProjectCreate(BaseModel):
     project_number: Optional[str] = None
     total_route_oh: float = Field(default=0.0, ge=0)
     total_route_ug: float = Field(default=0.0, ge=0)
+    tower_count: int = Field(default=0, ge=0)  # NEW: Number of towers
     line_passing_villages: Optional[str] = None
     subdivision: Optional[str] = None  # NEW: Subdivision
     agencies: Optional[List[Agency]] = []  # NEW: Agencies
@@ -479,8 +480,8 @@ def create_project(data: AndroidProjectCreate, db: Session = Depends(get_db_sess
     # Add OH-specific tasks if there's overhead line
     if data.total_route_oh > 0:
         tasks.extend([
-            {"name": "Foundation", "target": 100.0, "current": 0.0, "unit": "Nos."},
-            {"name": "Erection", "target": 100.0, "current": 0.0, "unit": "Nos."},
+            {"name": "Foundation", "target": data.tower_count, "current": 0.0, "unit": "Nos."},
+            {"name": "Erection", "target": data.tower_count, "current": 0.0, "unit": "Nos."},
             {"name": "Stringing", "target": data.total_route_oh, "current": 0.0, "unit": "km"}
         ])
     

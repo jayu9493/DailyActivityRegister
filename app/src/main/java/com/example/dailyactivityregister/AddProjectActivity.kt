@@ -65,6 +65,12 @@ fun AddProjectScreen(modifier: Modifier = Modifier, onSave: (ProjectCreateReques
     var villages by remember { mutableStateOf("") }
     var totalRouteOh by remember { mutableStateOf("") }
     var totalRouteUg by remember { mutableStateOf("") }
+    var towerCount by remember { mutableStateOf("") }
+    
+    // Type of Work selection
+    var selectedWorkType by remember { mutableStateOf("") }
+    var workTypeExpanded by remember { mutableStateOf(false) }
+    val workTypes = listOf("UG Only", "OH Only", "UG + OH Both")
     
     // Subdivision selection
     var selectedSubdivision by remember { mutableStateOf("") }
@@ -133,6 +139,51 @@ fun AddProjectScreen(modifier: Modifier = Modifier, onSave: (ProjectCreateReques
         
         Spacer(modifier = Modifier.height(16.dp))
         
+        // Type of Work Dropdown
+        Text(
+            "Type of Work",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        ExposedDropdownMenuBox(
+            expanded = workTypeExpanded,
+            onExpandedChange = { workTypeExpanded = it }
+        ) {
+            OutlinedTextField(
+                value = selectedWorkType,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Select Work Type *") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = workTypeExpanded) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor()
+            )
+            ExposedDropdownMenu(
+                expanded = workTypeExpanded,
+                onDismissRequest = { workTypeExpanded = false }
+            ) {
+                workTypes.forEach { workType ->
+                    DropdownMenuItem(
+                        text = { Text(workType) },
+                        onClick = {
+                            selectedWorkType = workType
+                            workTypeExpanded = false
+                            // Reset route lengths when work type changes
+                            when (workType) {
+                                "UG Only" -> totalRouteOh = "0"
+                                "OH Only" -> totalRouteUg = "0"
+                            }
+                        }
+                    )
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
         // Route Lengths Section
         Text(
             "Route Lengths",
@@ -141,27 +192,45 @@ fun AddProjectScreen(modifier: Modifier = Modifier, onSave: (ProjectCreateReques
         )
         Spacer(modifier = Modifier.height(8.dp))
         
-        OutlinedTextField(
-            value = totalRouteOh,
-            onValueChange = { totalRouteOh = it },
-            label = { Text("OH Line Length (km)") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            modifier = Modifier.fillMaxWidth(),
-            supportingText = { Text("Overhead line - Foundation, Erection, Stringing") }
-        )
+        // Show OH fields only if OH work is selected
+        if (selectedWorkType == "OH Only" || selectedWorkType == "UG + OH Both") {
+            OutlinedTextField(
+                value = totalRouteOh,
+                onValueChange = { totalRouteOh = it },
+                label = { Text("OH Line Length (km) *") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.fillMaxWidth(),
+                supportingText = { Text("Overhead line - Foundation, Erection, Stringing") }
+            )
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Tower Count
+            OutlinedTextField(
+                value = towerCount,
+                onValueChange = { towerCount = it },
+                label = { Text("Number of Towers *") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+                supportingText = { Text("For Foundation and Erection tasks") }
+            )
+            
+            Spacer(modifier = Modifier.height(12.dp))
+        }
         
-        Spacer(modifier = Modifier.height(12.dp))
-        
-        OutlinedTextField(
-            value = totalRouteUg,
-            onValueChange = { totalRouteUg = it },
-            label = { Text("UG Cable Length (km)") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            modifier = Modifier.fillMaxWidth(),
-            supportingText = { Text("Underground cable - Excavation") }
-        )
-        
-        Spacer(modifier = Modifier.height(12.dp))
+        // Show UG fields only if UG work is selected
+        if (selectedWorkType == "UG Only" || selectedWorkType == "UG + OH Both") {
+            OutlinedTextField(
+                value = totalRouteUg,
+                onValueChange = { totalRouteUg = it },
+                label = { Text("UG Cable Length (km) *") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.fillMaxWidth(),
+                supportingText = { Text("Underground cable - Excavation") }
+            )
+            
+            Spacer(modifier = Modifier.height(12.dp))
+        }
         
         OutlinedTextField(
             value = villages,
@@ -213,13 +282,29 @@ fun AddProjectScreen(modifier: Modifier = Modifier, onSave: (ProjectCreateReques
         Spacer(modifier = Modifier.height(24.dp))
         
         // Save Button
+        val isFormValid = projectName.isNotEmpty() && 
+                         projectNumber.isNotEmpty() && 
+                         selectedSubdivision.isNotEmpty() &&
+                         selectedWorkType.isNotEmpty() &&
+                         when (selectedWorkType) {
+                             "UG Only" -> totalRouteUg.isNotEmpty()
+                             "OH Only" -> totalRouteOh.isNotEmpty() && towerCount.isNotEmpty()
+                             "UG + OH Both" -> totalRouteOh.isNotEmpty() && totalRouteUg.isNotEmpty() && towerCount.isNotEmpty()
+                             else -> false
+                         }
+        
         Button(
             onClick = {
+                val ohLength = if (selectedWorkType == "UG Only") 0.0 else totalRouteOh.toDoubleOrNull() ?: 0.0
+                val ugLength = if (selectedWorkType == "OH Only") 0.0 else totalRouteUg.toDoubleOrNull() ?: 0.0
+                val towers = if (selectedWorkType == "UG Only") 0 else towerCount.toIntOrNull() ?: 0
+                
                 val request = ProjectCreateRequest(
                     project_name = projectName,
                     project_number = projectNumber.ifEmpty { null },
-                    total_route_oh = totalRouteOh.toDoubleOrNull() ?: 0.0,
-                    total_route_ug = totalRouteUg.toDoubleOrNull() ?: 0.0,
+                    total_route_oh = ohLength,
+                    total_route_ug = ugLength,
+                    tower_count = towers,
                     line_passing_villages = villages.ifEmpty { null },
                     subdivision = selectedSubdivision.ifEmpty { null },
                     agencies = agencies.map { it.toRequest() }
@@ -227,7 +312,7 @@ fun AddProjectScreen(modifier: Modifier = Modifier, onSave: (ProjectCreateReques
                 onSave(request)
             },
             modifier = Modifier.fillMaxWidth(),
-            enabled = projectName.isNotEmpty() && projectNumber.isNotEmpty() && selectedSubdivision.isNotEmpty()
+            enabled = isFormValid
         ) {
             Text("Create Project")
         }

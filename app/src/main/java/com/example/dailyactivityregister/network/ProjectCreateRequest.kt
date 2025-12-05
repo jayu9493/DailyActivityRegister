@@ -7,9 +7,10 @@ data class ProjectCreateRequest(
     val project_number: String?,
     val total_route_oh: Double,
     val total_route_ug: Double,
+    val tower_count: Int,  // NEW: Number of towers for Foundation/Erection
     val line_passing_villages: String?,
-    val subdivision: String?,  // NEW: Subdivision
-    val agencies: List<AgencyRequest>?  // NEW: Agencies
+    val subdivision: String?,
+    val agencies: List<AgencyRequest>?
 ) : Serializable
 
 data class AgencyRequest(
