@@ -172,6 +172,8 @@ class AndroidProjectCreate(BaseModel):
     total_route_oh: float = Field(default=0.0, ge=0)
     total_route_ug: float = Field(default=0.0, ge=0)
     line_passing_villages: Optional[str] = None
+    subdivision: Optional[str] = None  # NEW: Subdivision
+    agencies: Optional[List[Agency]] = []  # NEW: Agencies
 
 # ======================================================================================
 # 4. DEPENDENCY INJECTION
@@ -464,12 +466,28 @@ async def upload_project(file: UploadFile = File(...), db: Session = Depends(get
 @app.post("/api/android/projects/create", response_model=ProjectResponse)
 def create_project(data: AndroidProjectCreate, db: Session = Depends(get_db_session)):
     total = data.total_route_oh + data.total_route_ug
+    
+    # Smart task creation based on line type
     tasks = [
-        {"name": "Survey", "target": 100.0, "current": 0.0, "unit": "%"},
-        {"name": "Excavation", "target": 100.0, "current": 0.0, "unit": "Nos."},
-        {"name": "Erection", "target": 100.0, "current": 0.0, "unit": "Nos."},
-        {"name": "Stringing", "target": total, "current": 0.0, "unit": "km"}
+        {"name": "Survey", "target": 100.0, "current": 0.0, "unit": "%"}
     ]
+    
+    # Add UG-specific tasks if there's underground cable
+    if data.total_route_ug > 0:
+        tasks.append({"name": "Excavation", "target": data.total_route_ug, "current": 0.0, "unit": "km"})
+    
+    # Add OH-specific tasks if there's overhead line
+    if data.total_route_oh > 0:
+        tasks.extend([
+            {"name": "Foundation", "target": 100.0, "current": 0.0, "unit": "Nos."},
+            {"name": "Erection", "target": 100.0, "current": 0.0, "unit": "Nos."},
+            {"name": "Stringing", "target": data.total_route_oh, "current": 0.0, "unit": "km"}
+        ])
+    
+    # Convert agencies from Pydantic models to dicts
+    agencies_data = []
+    if data.agencies:
+        agencies_data = [a.model_dump() if hasattr(a, 'model_dump') else a for a in data.agencies]
     
     project_dict = {
         "project_name": data.project_name,
@@ -478,8 +496,9 @@ def create_project(data: AndroidProjectCreate, db: Session = Depends(get_db_sess
         "total_route_oh": data.total_route_oh,
         "total_route_ug": data.total_route_ug,
         "line_passing_villages": data.line_passing_villages,
+        "subdivision": data.subdivision,  # NEW
         "tasks": tasks,
-        "agencies": [],
+        "agencies": agencies_data,  # NEW
         "daily_logs": []
     }
     
