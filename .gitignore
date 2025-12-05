@@ -37,3 +37,13 @@ com_crashlytics_export_strings.xml
 # Documentation (local only)
 docs/
 
+# Development tools and scripts (local only)
+dev-tools/
+backend/DailyActivityRegisterBackend/scripts/dev-scripts/
+backend/DailyActivityRegisterBackend/scripts/__pycache__/
+database_backups/
+
+# Build outputs
+build_output*.txt
+
+
